@@ -1,0 +1,12 @@
+{
+  "name": "RVS",
+  "version": "0.0.0",
+  "authors": [
+    "Stef Schenkelaars <stef.schenkelaars@gmail.com>"
+  ],
+  "description": "Roeier Volg Systeem",
+  "license": "Apache",
+  "dependencies": {
+    "angular": "~1.2.16"
+  }
+}

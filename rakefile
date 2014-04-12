@@ -1,0 +1,134 @@
+# run rake compile compress=true for minification
+# run rake compile single=true for seperate files
+# run rake watch to autmatic update assets
+
+
+# Require gems from Gemfile
+Bundler.require
+require 'logger'
+
+# Configuration
+BUNDLES = %w( application.js.coffee application.css.scss )
+# IMAGES = %w( select2/select2-spinner.gif select2/select2.png )
+IMAGES = %w( )
+ROOT   = Pathname(File.dirname(__FILE__))
+LOGGER = Logger.new(STDOUT)
+BUILD_DIR = ROOT.join("public/assets")
+SOURCE_DIR = ROOT.join("app")
+VENDOR_DIR = ROOT.join("bower_components")
+
+task default: :compile
+
+task compile: :cleanup do
+  begin
+    
+    # Create a new Sprockets::Environment instance, passing in some configurations
+    sprockets = Sprockets::Environment.new(ROOT) do |env|
+      env.logger = LOGGER
+      if ENV['compress'] == 'true'
+        env.js_compressor  = :uglifier
+        env.css_compressor = :scss
+      end
+    end
+    
+    # Append the asset paths
+    sprockets.append_path(SOURCE_DIR.join('javascripts').to_s)
+    sprockets.append_path(SOURCE_DIR.join('stylesheets').to_s)
+    sprockets.append_path(VENDOR_DIR.to_s)
+
+    BUNDLES.each do |bundle|
+      # Find asset
+      assets = sprockets.find_asset(bundle)
+      
+      # Get real filename
+      folder, filename = assets.pathname.to_s.split('/')[-2..-1]
+      basename, ext = filename.match(/(.+)(\.js|\.css)/)[1..2]
+      finalname = basename + ext
+      
+      # Add digest to filename in production
+      finalname = "#{basename}-#{assets.digest}#{ext}" if ENV['compress'] == 'true'
+      
+      # Write assets to build dir
+      FileUtils.mkpath BUILD_DIR
+      assets.write_to(BUILD_DIR.join(finalname))  
+      
+      
+      # If you want to reference a single CSS file (e.g. filename.css) instead of an entire bundle. Build a standalone package for each CSS source
+      if ENV['single'] == 'true'
+        assets.to_a.each do |asset|
+          # strip filename.css.foo.bar.css multiple extensions
+          realname = asset.pathname.to_s.match(/\/([^\/]+)(\.js|\.css)/)[1..2].join('')
+          asset.write_to(BUILD_DIR.join(folder, realname))
+        end
+      end
+      
+    end
+    
+    # Process the images
+    IMAGES.each do |image|
+      assets = sprockets.find_asset(image)
+      filename = assets.pathname.to_s.split('/')[-1]
+      assets.write_to(BUILD_DIR.join(filename))
+    end
+    
+    puts "Compile complete"
+    
+  rescue Exception => e
+    puts e.message
+  end
+end
+
+# Watch source directory for file changes and compile
+task watch: :compile do
+  # options = {:latency => 4, :no_defer => true }
+  fsevent = FSEvent.new
+  fsevent.watch SOURCE_DIR.to_s do |directories|
+    puts "Detected change inside: #{directories.inspect}"
+ 
+    Rake::Task["compile"].reenable
+    Rake::Task["compile"].invoke
+    
+  end
+  fsevent.run
+end
+
+# Cleanup asset directory
+task :cleanup do
+  dirs = Dir.glob(File.join(BUILD_DIR.join("{*.js,*.css}")))
+  dirs.each do |dir|
+    FileUtils.rm_rf dir
+  end
+end
+
+# # Use to minify: rake compile env=production
+# # add single=true to include every single file seperately
+# 
+# # Asset tasks
+# require 'rubygems'
+# require 'bundler'
+# require 'pathname'
+# require 'logger'
+# require 'fileutils'
+#  
+
+
+#  
+# # Cleanup asset directory
+# task :cleanup do
+#   dirs = Dir.glob(File.join(BUILD_DIR.join("{*.js,*.css}")))
+#   dirs.each do |dir|
+#     FileUtils.rm_rf dir
+#   end
+# end
+#  
+# # Minify assets
+# module Minifier
+#   def Minifier.minify(files)
+#     files.each do |file|
+#       cmd = "java -jar lib/yuicompressor/yuicompressor-2.4.7.jar #{file[:src]} -o #{file[:dst]} --charset utf-8"
+#       puts cmd
+#       ret = system(cmd) # *** SYSTEM RUN LOCAL COMMANDS ***
+#       raise "Minification failed for #{file}" if !ret
+#     end
+#   end
+# end
